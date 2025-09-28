@@ -1,0 +1,7 @@
+101|São Paulo|SP
+102|Rio de Janeiro|RJ
+103|Curitiba|PR
+101|São Paulo|SP
+102|Rio de Janeiro|RJ
+103|Curitiba|PR
+10|Assis|SP

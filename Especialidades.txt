@@ -1,0 +1,5 @@
+50|Clínico Geral|150.0|10
+51|Cardiologia|250.0|5
+50|Clínico Geral|150.0|10
+51|Cardiologia|250.0|2
+14|Ortopedia|200.0|4
