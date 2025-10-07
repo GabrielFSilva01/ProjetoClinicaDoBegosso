@@ -1,25 +1,21 @@
-# medicos.py
+
 
 from ArvoreBinaria.BaseDados import BaseDados
-from Classes.Cidade import Cidades 
-from Classes.Especialidades import Especialidades
+
 
 class Medicos(BaseDados):
-    """
-    Gerencia a tabela Médicos.
-    Inclui lookups em Cidades (Item 3) e Especialidades (Item 3.1).
-    Estrutura: Cod_Med|Nome|Endereco|Telefone|Cod_Cidade|Cod_Especialidade
-    """
+  
     
-    def __init__(self):
+   
+    def __init__(self, cidades_manager, especialidades_manager):
         super().__init__('Medicos')
-        self.cidades_manager = Cidades()
-        self.especialidades_manager = Especialidades()
+        
+        self.cidades_manager = cidades_manager 
+        self.especialidades_manager = especialidades_manager
 
-    # --- FUNÇÕES AUXILIARES ---
 
     def _deserializar(self, registro_string):
-        """Converte a string do disco em um dicionário básico."""
+      
         try:
             campos = registro_string.split('|')
             return {
@@ -29,12 +25,11 @@ class Medicos(BaseDados):
         except Exception:
             return None
 
-    # --- OPERAÇÕES CRUD COM LÓGICA ---
 
     def incluir_medico(self, codigo, nome, end, tel, cod_cidade, cod_especialidade):
-        """Implementa Inclusão (1.1), validando Cod_Cidade e Cod_Especialidade."""
         
-        # 1. Validação de Relacionamento
+        
+        
         if not self.cidades_manager.buscar_por_chave(cod_cidade):
             print(f"ERRO: Inclusão abortada. Cidade {cod_cidade} não encontrada.")
             return False
@@ -45,16 +40,13 @@ class Medicos(BaseDados):
             print(f"ERRO: Médico com código {codigo} já existe.")
             return False
 
-        # 2. Persistência
         registro_formatado = f"{codigo}|{nome}|{end}|{tel}|{cod_cidade}|{cod_especialidade}"
         self.incluir(registro_formatado, codigo)
         print(f"SUCESSO: Médico {nome} ({codigo}) incluído.")
         return True
 
     def consultar_medico(self, codigo):
-        """
-        Implementa Consulta (1.2). Realiza lookup de Cidade (3) e Especialidade (3.1).
-        """
+        
         registro_string = self.buscar_por_chave(codigo)
         if registro_string is None:
             return None 
@@ -63,7 +55,7 @@ class Medicos(BaseDados):
         if medico_data is None:
             return None
         
-        # Item 3: Lookup na Cidades
+  
         cidade = self.cidades_manager.consultar_cidade(medico_data["cod_cidade"])
         if cidade:
             medico_data["cidade_nome"] = cidade["descricao"]
@@ -72,7 +64,7 @@ class Medicos(BaseDados):
             medico_data["cidade_nome"] = "N/A"
             medico_data["cidade_estado"] = "N/A"
 
-        # Item 3.1: Lookup na Especialidades
+        
         especialidade = self.especialidades_manager.consultar_especialidade(medico_data["cod_especialidade"])
         if especialidade:
             medico_data["especialidade_desc"] = especialidade["descricao"]
@@ -86,14 +78,13 @@ class Medicos(BaseDados):
         return medico_data
     
     def listar_todos(self):
-        """Implementa Leitura Exaustiva (1.4). Retorna a lista completa com lookups."""
+
         registros_strings = self.ler_todos()
         medicos_completos = []
         
         for reg_str in registros_strings:
             medico_data = self._deserializar(reg_str)
             if medico_data:
-                # Reutiliza a lógica de lookup da consulta para cada item
                 cidade = self.cidades_manager.consultar_cidade(medico_data["cod_cidade"])
                 medico_data["cidade_nome"] = cidade["descricao"] if cidade else "N/A"
                 medico_data["cidade_estado"] = cidade["estado"] if cidade else "N/A"
@@ -107,7 +98,7 @@ class Medicos(BaseDados):
         return medicos_completos
 
     def excluir_medico(self, codigo):
-        """Implementa Exclusão (1.3) (Exclusão Lógica e remoção do índice)."""
+        
         if self.excluir_por_chave(codigo):
             print(f"SUCESSO: Médico {codigo} marcado para exclusão.")
             return True
