@@ -1,7 +1,4 @@
-# main.py - O PONTO DE ENTRADA FINAL DO SEU PROJETO
 
-# Importa a classe principal da sua interface gráfica
-# Certifique-se de que o arquivo interface_app.py está na mesma pasta.
 from interface_app import ClinicaApp
 
 def main():

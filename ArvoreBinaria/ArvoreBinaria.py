@@ -1,7 +1,7 @@
-# arvore_binaria.py - CÓDIGO FINAL
+
 
 class NoIndice:
-    """Representa um nó na Árvore Binária, armazenando a chave e o endereço no arquivo."""
+    
     def __init__(self, chave, endereco_byte):
         self.chave = chave                       # A chave de acesso (ex: Código do Paciente)
         self.endereco_byte = endereco_byte       # O 'End' ou Offset no arquivo de dados

@@ -1,7 +1,7 @@
-
+# Classes/Consultas.py - CÓDIGO FINAL E ESTÁVEL
 
 from ArvoreBinaria.BaseDados import BaseDados
-# Manter as importações de módulo para tipagem/uso interno, mas os objetos serão INJETADOS
+# Importações de módulo para uso interno (objetos serão injetados)
 import Classes.Pacientes as pac_mod
 import Classes.Medicos as med_mod
 import Classes.Exames as exa_mod
@@ -10,21 +10,24 @@ import Classes.Especialidades as esp_mod
 from datetime import datetime
 
 class Consultas(BaseDados):
-   
+    """
+    Gerencia a tabela Consultas, totalmente injetada com todas as dependências.
+    Implementa a lógica de Relatórios (Item 6) e Ordenação (Item 7).
+    """
     
-    
+    # CONSTRUTOR CORRIGIDO PARA INJEÇÃO DE DEPENDÊNCIA (DI)
     def __init__(self, pacientes_manager, medicos_manager, exames_manager, diarias_manager, especialidades_manager):
         super().__init__('Consultas')
-      
         self.pacientes_manager = pacientes_manager
         self.medicos_manager = medicos_manager
         self.exames_manager = exames_manager
         self.diarias_manager = diarias_manager 
         self.especialidades_manager = especialidades_manager
         
- 
+    # --- FUNÇÕES AUXILIARES ---
 
     def _deserializar(self, registro_string):
+        """Converte a string do disco em um dicionário básico."""
         try:
             campos = registro_string.split('|')
             return {
@@ -32,16 +35,19 @@ class Consultas(BaseDados):
                 "cod_paciente": int(campos[1]), 
                 "cod_medico": int(campos[2]), 
                 "cod_exame": int(campos[3]),
-                "data": campos[4], # Formato AAAAMMDD
+                "data": campos[4], # Data que pode vir com barras do arquivo
                 "hora": campos[5], 
             }
         except Exception:
             return None
 
     def _realizar_lookups(self, consulta_data):
+        """
+        Realiza todos os lookups e cálculos necessários (JOIN).
+        Lança ValueError se alguma dependência essencial não for encontrada.
+        """
         
-        
-       
+        # 1. Lookup de Médico, Especialidade e Limite Diário
         medico_completo = self.medicos_manager.consultar_medico(consulta_data["cod_medico"])
         
         if medico_completo:
@@ -51,17 +57,17 @@ class Consultas(BaseDados):
             consulta_data["limite_diario"] = medico_completo["limite_diario"]
             consulta_data["especialidade_desc"] = medico_completo.get("especialidade_desc", "N/A")
         else:
-            consulta_data.update({"nome_medico": "N/A", "cod_especialidade": 0, "valor_consulta": 0.0, "limite_diario": 0, "especialidade_desc": "N/A"})
+            raise ValueError(f"Médico {consulta_data['cod_medico']} não encontrado.")
         
-       
+        # 2. Lookup de Exame
         exame_completo = self.exames_manager.consultar_exame(consulta_data["cod_exame"])
         if exame_completo:
             consulta_data["desc_exame"] = exame_completo["descricao"]
             consulta_data["valor_exame"] = exame_completo["valor_exame"]
         else:
-            consulta_data.update({"desc_exame": "N/A", "valor_exame": 0.0})
+            raise ValueError(f"Exame {consulta_data['cod_exame']} não encontrado.")
 
-        
+        # 3. Lookup de Paciente e Cidade/IMC
         paciente_completo = self.pacientes_manager.consultar_paciente(consulta_data["cod_paciente"])
         if paciente_completo:
             consulta_data["nome_paciente"] = paciente_completo["nome"]
@@ -69,9 +75,9 @@ class Consultas(BaseDados):
             consulta_data["imc"] = paciente_completo.get("imc", 0.0)
             consulta_data["diagnostico_imc"] = paciente_completo.get("diagnostico", "N/A")
         else:
-            consulta_data.update({"nome_paciente": "N/A", "nome_cidade_paciente": "N/A", "imc": 0.0, "diagnostico_imc": "N/A"})
+            raise ValueError(f"Paciente {consulta_data['cod_paciente']} não encontrado.")
         
-      
+        # 4. Cálculo do Valor Total (Item 5.2)
         v_total = consulta_data.get("valor_consulta", 0.0) + consulta_data.get("valor_exame", 0.0)
         consulta_data["valor_total_a_pagar"] = round(v_total, 2)
         
@@ -113,17 +119,21 @@ class Consultas(BaseDados):
         return True
 
     def consultar_consulta(self, codigo):
-       
+        """Retorna a consulta enriquecida."""
         registro_string = self.buscar_por_chave(codigo)
         if registro_string is None: return None 
         
         consulta_data = self._deserializar(registro_string)
         if consulta_data is None: return None
         
+        # CRÍTICO: Limpa a data do dado lido do arquivo antes de enriquecer
+        data_raw = consulta_data.get('data', '')
+        consulta_data['data'] = data_raw.replace('/', '').replace('-', '').replace(' ', '').strip()
+        
         return self._realizar_lookups(consulta_data)
 
     def excluir_consulta(self, codigo):
-        
+        """Exclusão Lógica e atualização de Diárias (-1) (Item 5.4)."""
         consulta = self.consultar_consulta(codigo)
         if consulta is None:
             print(f"ERRO: Consulta {codigo} não encontrada para exclusão.")
@@ -142,98 +152,83 @@ class Consultas(BaseDados):
         else:
             return False
 
-    
+    # --- MÉTODOS DE RELATÓRIO (Item 6 e 7) ---
 
     def _obter_consultas_com_valor(self):
-        
+        """Lê todas as consultas ATIVAS e as enriquece. Útil para qualquer relatório."""
         registros_strings = self.ler_todos() 
         consultas_completas = []
+        
+        print(f"\n[DEBUG] Total de registros ATIVOS lidos do disco (Consulta): {len(registros_strings)}")
         
         for reg_str in registros_strings:
             consulta_data = self._deserializar(reg_str)
             if consulta_data:
+                # CRÍTICO: Limpa a data do dado lido do arquivo para o formato AAAAMMDD
+                data_raw = consulta_data.get('data', '')
+                consulta_data['data'] = data_raw.replace('/', '').replace('-', '').replace(' ', '').strip()
+                
                 try:
                     consulta_completa = self._realizar_lookups(consulta_data)
+                    print(f"[DEBUG] Sucesso JOIN Cód: {consulta_completa['codigo']} | Data: {consulta_completa['data']}")
                     consultas_completas.append(consulta_completa)
                 except Exception as e:
-                    print(f"AVISO: Pulando registro com erro de lookup/dependência: {e}")
+                    print(f"[AVISO CRÍTICO] Falha no JOIN/Lookup da Consulta {consulta_data.get('codigo')}. Erro: {e}. O registro é ignorado no faturamento.")
                     
         return consultas_completas
 
     def faturamento_por_dia(self, data):
-   
-        faturamento_total = 0.0
+        """
+        Item 6.1: Retorna a lista de consultas detalhadas do dia.
+        CORRIGIDO: Retorna a LISTA filtrada.
+        """
         consultas = self._obter_consultas_com_valor()
         
-        print(f"\n--- Faturamento do Dia: {data} ---")
+        # Filtra as consultas pela data (AAAAMMDD limpa)
+        relatorio_filtrado = [cons for cons in consultas if cons.get('data') == data]
         
-        for cons in consultas:
-            if cons['data'] == data:
-                faturamento_total += cons['valor_total_a_pagar']
-                print(f"  Consulta {cons['codigo']} ({cons['nome_paciente']}): R$ {cons['valor_total_a_pagar']:.2f}")
-                
-        print(f"FATURAMENTO TOTAL DO DIA {data}: R$ {faturamento_total:.2f}")
-        return faturamento_total
+        return relatorio_filtrado
 
     def faturamento_por_periodo(self, data_inicial, data_final):
-        
-        faturamento_total = 0.0
-        
+        """
+        Item 6.2: Retorna a lista de consultas detalhadas do período.
+        CORRIGIDO: Retorna a LISTA filtrada.
+        """
         if data_inicial > data_final:
             data_inicial, data_final = data_final, data_inicial
             
         consultas = self._obter_consultas_com_valor()
         
-        print(f"\n--- Faturamento do Período: {data_inicial} a {data_final} ---")
-        
-        for cons in consultas:
-            data_consulta = cons['data']
-            if data_inicial <= data_consulta <= data_final:
-                faturamento_total += cons['valor_total_a_pagar']
-                print(f"  Consulta {cons['codigo']} ({data_consulta} - {cons['nome_paciente']}): R$ {cons['valor_total_a_pagar']:.2f}")
+        # Filtra as consultas pelo período de datas (AAAAMMDD limpas)
+        relatorio_filtrado = [
+            cons for cons in consultas 
+            if data_inicial <= cons.get('data', '') <= data_final
+        ]
 
-        print(f"FATURAMENTO TOTAL NO PERÍODO: R$ {faturamento_total:.2f}")
-        return faturamento_total
+        return relatorio_filtrado
         
     def faturamento_por_medico(self, cod_medico):
-        faturamento_total = 0.0
-        
-        medico_info = self.medicos_manager.consultar_medico(cod_medico)
-        nome_medico = medico_info["nome"] if medico_info else f"Médico {cod_medico} (Não Encontrado)"
-        
+        """
+        Item 6.3: Retorna a lista de consultas detalhadas do médico.
+        CORRIGIDO: Retorna a LISTA filtrada.
+        """
         consultas = self._obter_consultas_com_valor()
-        
-        print(f"\n--- Faturamento do(a) {nome_medico} ---")
-        
-        for cons in consultas:
-            if cons['cod_medico'] == cod_medico:
-                faturamento_total += cons['valor_total_a_pagar']
-                print(f"  Consulta {cons['codigo']} ({cons['data']} - {cons['nome_paciente']}): R$ {cons['valor_total_a_pagar']:.2f}")
-
-        print(f"FATURAMENTO TOTAL DO(A) {nome_medico}: R$ {faturamento_total:.2f}")
-        return faturamento_total
+        relatorio_filtrado = [cons for cons in consultas if cons.get('cod_medico') == cod_medico]
+        return relatorio_filtrado
 
     def faturamento_por_especialidade(self, cod_especialidade):
-     
-        faturamento_total = 0.0
-        
-        esp_info = self.especialidades_manager.consultar_especialidade(cod_especialidade)
-        nome_especialidade = esp_info["descricao"] if esp_info else f"Especialidade {cod_especialidade} (Não Encontrada)"
-        
+        """
+        Item 6.4: Retorna a lista de consultas detalhadas da especialidade.
+        CORRIGIDO: Retorna a LISTA filtrada.
+        """
         consultas = self._obter_consultas_com_valor()
-        
-        print(f"\n--- Faturamento da Especialidade: {nome_especialidade} ---")
-        
-        for cons in consultas:
-            if cons.get('cod_especialidade') == cod_especialidade:
-                faturamento_total += cons['valor_total_a_pagar']
-                print(f"  Consulta {cons['codigo']} ({cons['data']} - {cons['nome_medico']}): R$ {cons['valor_total_a_pagar']:.2f}")
-
-        print(f"FATURAMENTO TOTAL DA ESPECIALIDADE {nome_especialidade}: R$ {faturamento_total:.2f}")
-        return faturamento_total
+        relatorio_filtrado = [cons for cons in consultas if cons.get('cod_especialidade') == cod_especialidade]
+        return relatorio_filtrado
     
     def relatorio_ordenado(self):
-       
+        """
+        Item 7: Retorna a lista completa de consultas ordenadas por código (usando índice).
+        """
         
         chaves_ordenadas = self.indice.percurso_em_ordem() 
         lista_consultas_ordenadas = []
@@ -245,23 +240,14 @@ class Consultas(BaseDados):
             
             consulta_data = self._deserializar(registro_string)
             if consulta_data:
+                # Limpa a data do dado lido do arquivo para o formato AAAAMMDD
+                data_raw = consulta_data.get('data', '')
+                consulta_data['data'] = data_raw.replace('/', '').replace('-', '').replace(' ', '').strip()
+
                 try:
                     consulta_completa = self._realizar_lookups(consulta_data)
                     lista_consultas_ordenadas.append(consulta_completa)
                 except Exception as e:
-                    print(f"AVISO: Pulando registro {codigo_consulta} com erro durante o enriquecimento: {e}")
-        
-        valor_total_pago = sum(c['valor_total_a_pagar'] for c in lista_consultas_ordenadas)
-        pacientes_unicos = set(c['cod_paciente'] for c in lista_consultas_ordenadas)
-        
-        print("\n--- RELATÓRIO DE CONSULTAS ORDENADO POR CÓDIGO (Item 7) ---")
-        for cons in lista_consultas_ordenadas:
-            print(f"Cód. Consulta: {cons['codigo']} | Paciente: {cons['nome_paciente']} | Médico: {cons['nome_medico']}")
-            print(f"  > Valor a Pagar: R$ {cons['valor_total_a_pagar']:.2f}")
-            
-        print("------------------------------------------------------------------")
-        print(f"QUANTIDADE TOTAL DE REGISTROS DE CONSULTAS: {len(lista_consultas_ordenadas)}")
-        print(f"QUANTIDADE TOTAL DE PACIENTES ATENDIDOS: {len(pacientes_unicos)}")
-        print(f"VALOR TOTAL GERAL A SER PAGO: R$ {valor_total_pago:.2f}")
-        
+                    print(f"[AVISO CRÍTICO] Falha na Consulta {codigo_consulta} durante a ordenação. Erro: {e}")
+
         return lista_consultas_ordenadas
